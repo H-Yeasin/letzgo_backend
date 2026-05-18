@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import relationship
 from app.db.base import Base, TimestampMixin
@@ -7,6 +7,9 @@ from app.db.base import Base, TimestampMixin
 
 class Match(Base, TimestampMixin):
     __tablename__ = "matches"
+    __table_args__ = (
+        UniqueConstraint("ride_id", "guest_id", name="uq_matches_ride_guest"),
+    )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ride_id = Column(Uuid(as_uuid=True), ForeignKey("ride_pings.id"), nullable=False, index=True)

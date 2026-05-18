@@ -90,3 +90,7 @@ class RidePingListResponse(BaseModel):
 class RidePingNearbyListResponse(BaseModel):
     total: int
     items: List[RidePingNearbyResponse]
+
+
+class DeleteExpiredPingsResponse(BaseModel):
+    deleted: int

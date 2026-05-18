@@ -18,6 +18,7 @@ from app.core.exceptions import (
 )
 from app.services.ride_state_service import RideStateMachine
 from app.core.permissions import check_profile_complete, check_user_not_blocked
+from app.services.notification_service import NotificationService
 
 
 class MatchService:
@@ -105,6 +106,14 @@ class MatchService:
         self.db.add(match_request)
         self.db.commit()
         self.db.refresh(match_request)
+        guest_name = guest.name if guest and guest.name else "A rider"
+        NotificationService(self.db).create_notification(
+            user_id=ride.host_id,
+            title="New join request",
+            body=f"{guest_name} requested to join your ride.",
+            n_type="match_request",
+            data={"related_id": str(ride.id), "request_id": str(match_request.id)},
+        )
         return match_request
 
     def get_pending_requests(self, user_id: uuid.UUID) -> list:
@@ -123,60 +132,86 @@ class MatchService:
 
     def accept_request(self, request_id: uuid.UUID, host_id: uuid.UUID) -> Match:
         """Accept a join request (host only)."""
-        match_request = self.db.query(MatchRequest).filter(MatchRequest.id == request_id).first()
-        if not match_request:
-            raise NotFoundException(detail="Join request not found")
-
-        # Only host can accept
-        if match_request.host_id != host_id:
-            raise ForbiddenException(detail="Only the host can accept requests")
-
-        # Request must be pending
-        RideStateMachine.transition_request(match_request.status, REQUEST_STATUS_ACCEPTED)
-
-        # Ride must still be open
-        ride = self.db.query(RidePing).filter(RidePing.id == match_request.ride_id).first()
-        if not ride or ride.status != PING_STATUS_OPEN:
-            raise RideAlreadyMatchedException()
-
-        # --- NEW: Re-check capacity before accepting ---
-        if (ride.current_passengers or 0) >= ride.max_passengers:
-            raise BadRequestException(detail="This ride is already full")
-
-        # Update request status
-        match_request.status = REQUEST_STATUS_ACCEPTED
-
-        # Update ping status to matched
-        ride.status = PING_STATUS_MATCHED
-
-        # --- NEW: Increment current_passengers ---
-        ride.current_passengers = (ride.current_passengers or 0) + 1
-
-        # Create match
-        match = Match(
-            id=uuid.uuid4(),
-            ride_id=match_request.ride_id,
-            host_id=match_request.host_id,
-            guest_id=match_request.guest_id,
-            status=MATCH_STATUS_MATCHED,
-        )
-        self.db.add(match)
-
-        # Decline all other pending requests for this ride
-        other_requests = (
-            self.db.query(MatchRequest)
-            .filter(
-                MatchRequest.ride_id == match_request.ride_id,
-                MatchRequest.status == REQUEST_STATUS_PENDING,
-                MatchRequest.id != request_id,
+        match = None
+        is_full = False
+        ride_id = None
+        guest_id = None
+        with self.db.begin():
+            match_request = (
+                self.db.query(MatchRequest)
+                .filter(MatchRequest.id == request_id)
+                .with_for_update()
+                .first()
             )
-            .all()
-        )
-        for req in other_requests:
-            req.status = REQUEST_STATUS_DECLINED
+            if not match_request:
+                raise NotFoundException(detail="Join request not found")
 
-        self.db.commit()
-        self.db.refresh(match)
+            # Only host can accept
+            if match_request.host_id != host_id:
+                raise ForbiddenException(detail="Only the host can accept requests")
+
+            # Request must be pending
+            RideStateMachine.transition_request(match_request.status, REQUEST_STATUS_ACCEPTED)
+
+            # Ride must still be open
+            ride = (
+                self.db.query(RidePing)
+                .filter(RidePing.id == match_request.ride_id)
+                .with_for_update()
+                .first()
+            )
+            if not ride or ride.status != PING_STATUS_OPEN:
+                raise RideAlreadyMatchedException()
+
+            # --- NEW: Re-check capacity before accepting ---
+            if (ride.current_passengers or 0) >= ride.max_passengers:
+                raise BadRequestException(detail="This ride is already full")
+
+            # Update request status
+            match_request.status = REQUEST_STATUS_ACCEPTED
+
+            # Update ping status and increment
+            new_count = (ride.current_passengers or 0) + 1
+            ride.current_passengers = new_count
+            is_full = new_count >= ride.max_passengers
+            ride.status = PING_STATUS_MATCHED if is_full else PING_STATUS_OPEN
+
+            # Create match
+            match = Match(
+                id=uuid.uuid4(),
+                ride_id=match_request.ride_id,
+                host_id=match_request.host_id,
+                guest_id=match_request.guest_id,
+                status=MATCH_STATUS_MATCHED,
+            )
+            self.db.add(match)
+
+            ride_id = match_request.ride_id
+            guest_id = match_request.guest_id
+
+            # Decline all other pending requests only if ride is now full
+            if is_full:
+                other_requests = (
+                    self.db.query(MatchRequest)
+                    .filter(
+                        MatchRequest.ride_id == match_request.ride_id,
+                        MatchRequest.status == REQUEST_STATUS_PENDING,
+                        MatchRequest.id != request_id,
+                    )
+                    .all()
+                )
+                for req in other_requests:
+                    req.status = REQUEST_STATUS_DECLINED
+        if match:
+            self.db.refresh(match)
+        if ride_id and guest_id:
+            NotificationService(self.db).create_notification(
+                user_id=guest_id,
+                title="Request accepted",
+                body="Your join request was accepted.",
+                n_type="match_accepted",
+                data={"related_id": str(ride_id), "match_id": str(match.id) if match else None},
+            )
         return match
 
     def decline_request(self, request_id: uuid.UUID, host_id: uuid.UUID) -> MatchRequest:
@@ -192,6 +227,13 @@ class MatchService:
         match_request.status = REQUEST_STATUS_DECLINED
         self.db.commit()
         self.db.refresh(match_request)
+        NotificationService(self.db).create_notification(
+            user_id=match_request.guest_id,
+            title="Request declined",
+            body="Your join request was declined.",
+            n_type="match_declined",
+            data={"related_id": str(match_request.ride_id), "request_id": str(match_request.id)},
+        )
         return match_request
 
     def cancel_match(self, match_id: uuid.UUID, user_id: uuid.UUID) -> Match:
@@ -208,12 +250,11 @@ class MatchService:
 
         # Re-open the ride ping if it was matched
         ride = self.db.query(RidePing).filter(RidePing.id == match.ride_id).first()
-        if ride and ride.status == PING_STATUS_MATCHED:
-            ride.status = PING_STATUS_OPEN
-
         # --- NEW: Decrement current_passengers ---
         if ride and (ride.current_passengers or 0) > 0:
             ride.current_passengers -= 1
+            if ride.status == PING_STATUS_MATCHED and ride.current_passengers < ride.max_passengers:
+                ride.status = PING_STATUS_OPEN
 
         self.db.commit()
         self.db.refresh(match)

@@ -1,18 +1,32 @@
 from fastapi import APIRouter, Depends, status
+import logging
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from app.db.session import get_db
 from app.core.security import get_current_user_id
+from app.core.config import settings
 from app.services.ping_service import PingService
 from app.schemas.ping import (
     RidePingCreate, RidePingUpdate,
     RidePingResponse, RidePingListResponse,
-    RidePingNearbyListResponse, RidePingNearbyResponse,
+    DeleteExpiredPingsResponse,
 )
 from app.schemas.match import MatchRequestWithUserResponse, MatchRequestUserInfo
 import uuid
 
 router = APIRouter(prefix="/pings", tags=["Ride Pings"])
+logger = logging.getLogger("app.pings")
+
+
+def _safe_db_url(url: str) -> str:
+    try:
+        parsed = make_url(url)
+        if parsed.password:
+            parsed = parsed.set(password="***")
+        return str(parsed)
+    except Exception:
+        return "<unparseable>"
 
 
 @router.post("", response_model=RidePingResponse, status_code=status.HTTP_201_CREATED)
@@ -27,7 +41,33 @@ async def create_ping(
     return service.ping_to_response(ping)
 
 
-@router.get("/nearby", response_model=RidePingNearbyListResponse)
+@router.get("/me", response_model=RidePingListResponse)
+async def get_my_pings(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """List ride pings created by the authenticated host."""
+    service = PingService(db)
+    pings = service.get_pings_by_host(uuid.UUID(user_id))
+    items = [service.ping_to_response(ping) for ping in pings]
+    return {
+        "total": len(items),
+        "items": items,
+    }
+
+
+@router.delete("/expired", response_model=DeleteExpiredPingsResponse)
+async def delete_expired_pings(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Remove expired pings owned by the authenticated host."""
+    service = PingService(db)
+    deleted = service.delete_expired_pings_for_host(uuid.UUID(user_id))
+    return DeleteExpiredPingsResponse(deleted=deleted)
+
+
+@router.get("/nearby", response_model=RidePingListResponse)
 async def get_nearby_pings(
     lat: float,
     lng: float,
@@ -40,6 +80,15 @@ async def get_nearby_pings(
 
     Filters: status=open, within radius, not blocked, not expired, capacity available, gender compatible.
     """
+    logger.info(
+        "nearby_pings request user=%s lat=%.6f lng=%.6f radius=%.1f gender=%s db=%s",
+        user_id,
+        lat,
+        lng,
+        radius,
+        gender,
+        _safe_db_url(settings.DATABASE_URL),
+    )
     service = PingService(db)
     results = service.get_nearby_pings(
         lat=lat,
@@ -48,10 +97,11 @@ async def get_nearby_pings(
         radius_meters=radius,
         gender_preference=gender,
     )
+    logger.info("nearby_pings result_count=%s user=%s", len(results), user_id)
 
     items = []
-    for ping, distance in results:
-        items.append(service.ping_to_nearby_response(ping, float(distance)))
+    for ping, _distance in results:
+        items.append(service.ping_to_response(ping))
 
     return {
         "total": len(items),

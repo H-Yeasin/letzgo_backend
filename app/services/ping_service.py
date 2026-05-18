@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, text
-from geoalchemy2 import Geometry, functions as geo_func
+from sqlalchemy import func, text, cast
+from geoalchemy2 import Geometry, Geography, functions as geo_func
 from app.models.ride_ping import RidePing
 from app.models.match_request import MatchRequest
 from app.models.user import User
@@ -68,6 +68,16 @@ class PingService:
             raise NotFoundException(detail="Ride ping not found")
         return ping
 
+    def get_pings_by_host(self, host_id: uuid.UUID) -> list[RidePing]:
+        """List ride pings created by a specific host."""
+        query = (
+            self.db.query(RidePing)
+            .options(joinedload(RidePing.host))
+            .filter(RidePing.host_id == host_id)
+            .order_by(RidePing.created_at.desc())
+        )
+        return query.all()
+
     def get_nearby_pings(
         self,
         lat: float,
@@ -98,23 +108,20 @@ class PingService:
             BlockedUser.blocked_id == current_user_id
         )
 
+        # Use GEOGRAPHY type for accurate meter-based distance calculations
+        pickup_geog = cast(RidePing.pickup_geom, Geography)
+        point_geog = cast(func.ST_GeomFromText(point_wkt, 4326), Geography)
+
         query = (
             self.db.query(
                 RidePing,
-                geo_func.ST_Distance(
-                    RidePing.pickup_geom,
-                    func.ST_GeomFromText(point_wkt, 4326),
-                ).label("distance")
+                geo_func.ST_Distance(pickup_geog, point_geog).label("distance")
             )
             .options(joinedload(RidePing.host))
             .filter(
                 RidePing.status == PING_STATUS_OPEN,
                 RidePing.host_id != current_user_id,
-                geo_func.ST_DWithin(
-                    RidePing.pickup_geom,
-                    func.ST_GeomFromText(point_wkt, 4326),
-                    radius_meters,
-                ),
+                geo_func.ST_DWithin(pickup_geog, point_geog, radius_meters),
                 ~RidePing.host_id.in_(blocked_ids_query),
                 ~RidePing.host_id.in_(blocked_by_ids_query),
                 RidePing.expires_at > datetime.now(timezone.utc),
@@ -139,10 +146,7 @@ class PingService:
 
         # Order by distance and limit
         results = query.order_by(
-            geo_func.ST_Distance(
-                RidePing.pickup_geom,
-                func.ST_GeomFromText(point_wkt, 4326),
-            )
+            geo_func.ST_Distance(pickup_geog, point_geog)
         ).limit(limit).all()
 
         return results
@@ -183,30 +187,25 @@ class PingService:
             BlockedUser.blocked_id == current_user_id
         )
 
+        # Use GEOGRAPHY type for accurate meter-based distance calculations
+        pickup_geog = cast(RidePing.pickup_geom, Geography)
+        pickup_point_geog = cast(func.ST_GeomFromText(pickup_wkt, 4326), Geography)
+        dest_geog = cast(RidePing.destination_geom, Geography)
+        dest_point_geog = cast(func.ST_GeomFromText(dest_wkt, 4326), Geography)
+
         query = (
             self.db.query(
                 RidePing,
-                geo_func.ST_Distance(
-                    RidePing.pickup_geom,
-                    func.ST_GeomFromText(pickup_wkt, 4326),
-                ).label("distance")
+                geo_func.ST_Distance(pickup_geog, pickup_point_geog).label("distance")
             )
             .options(joinedload(RidePing.host))
             .filter(
                 RidePing.status == PING_STATUS_OPEN,
                 RidePing.host_id != current_user_id,
                 # Pickup must be near user's current location
-                geo_func.ST_DWithin(
-                    RidePing.pickup_geom,
-                    func.ST_GeomFromText(pickup_wkt, 4326),
-                    radius_meters,
-                ),
+                geo_func.ST_DWithin(pickup_geog, pickup_point_geog, radius_meters),
                 # Destination must be near user's desired destination
-                geo_func.ST_DWithin(
-                    RidePing.destination_geom,
-                    func.ST_GeomFromText(dest_wkt, 4326),
-                    radius_meters,
-                ),
+                geo_func.ST_DWithin(dest_geog, dest_point_geog, radius_meters),
                 ~RidePing.host_id.in_(blocked_ids_query),
                 ~RidePing.host_id.in_(blocked_by_ids_query),
                 RidePing.expires_at > datetime.now(timezone.utc),
@@ -231,10 +230,7 @@ class PingService:
 
         # Order by distance and limit
         results = query.order_by(
-            geo_func.ST_Distance(
-                RidePing.pickup_geom,
-                func.ST_GeomFromText(pickup_wkt, 4326),
-            )
+            geo_func.ST_Distance(pickup_geog, pickup_point_geog)
         ).limit(limit).all()
 
         return results
@@ -313,6 +309,21 @@ class PingService:
         self.db.commit()
         return len(stale)
 
+    def delete_expired_pings_for_host(self, host_id: uuid.UUID) -> int:
+        """Remove expired pings that belong to the given host."""
+        now = datetime.now(timezone.utc)
+        deleted = (
+            self.db.query(RidePing)
+            .filter(
+                RidePing.host_id == host_id,
+                RidePing.status == PING_STATUS_EXPIRED,
+                RidePing.expires_at <= now,
+            )
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted
+
     def ping_to_response(self, ping: RidePing) -> dict:
         """Convert ping model to full response dict with lat/lng."""
         lat, lng = extract_coordinates(ping.pickup_geom)
@@ -354,38 +365,25 @@ class PingService:
         }
 
     def ping_to_nearby_response(self, ping: RidePing, distance_meters: float) -> dict:
-        """Convert ping model to nearby feed response dict (limited pre-join visibility).
-
-        Only exposes: host gender, rating, trust_level
-        """
-        lat, lng = extract_coordinates(ping.pickup_geom)
-
-        # Calculate trust level based on completed rides and rating
-        trust_level = "unknown"
+        """Convert ping model to nearby feed response dict."""
+        host_data = None
         if ping.host:
-            if ping.host.completed_rides_count >= 20 and (ping.host.rating_avg or 0) >= 4.5:
-                trust_level = "high"
-            elif ping.host.completed_rides_count >= 5 and (ping.host.rating_avg or 0) >= 4.0:
-                trust_level = "medium"
-            elif ping.host.completed_rides_count > 0:
-                trust_level = "low"
-
-        available_seats = ping.max_passengers - (ping.current_passengers or 0)
-        if available_seats < 0:
-            available_seats = 0
+            host_data = {
+                "id": str(ping.host.id),
+                "gender": ping.host.gender,
+                "rating": ping.host.rating_avg or 0.0,
+                "trust_level": "unknown",
+            }
 
         return {
             "ride_id": str(ping.id),
-            "host": {
-                "id": str(ping.host.id) if ping.host else str(ping.host_id),
-                "gender": ping.host.gender if ping.host else None,
-                "rating": ping.host.rating_avg if ping.host else 0.0,
-                "trust_level": trust_level,
-            },
+            "host": host_data,
             "pickup_label": ping.pickup_label,
             "destination_label": ping.destination_label,
             "estimated_fare": ping.estimated_fare,
-            "available_seats": available_seats,
+            "available_seats": max(
+                0, (ping.max_passengers or 0) - (ping.current_passengers or 0)
+            ),
             "gender_preference": ping.gender_preference,
             "distance_meters": round(distance_meters, 1),
         }
