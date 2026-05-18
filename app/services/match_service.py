@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 from app.models.ride_ping import RidePing
 from app.models.match_request import MatchRequest
@@ -131,43 +132,63 @@ class MatchService:
         return requests
 
     def accept_request(self, request_id: uuid.UUID, host_id: uuid.UUID) -> Match:
-        """Accept a join request (host only)."""
-        match = None
-        is_full = False
-        ride_id = None
-        guest_id = None
-        with self.db.begin():
+        """Accept a join request (host only). Idempotent - safe to call multiple times."""
+        try:
+            # 1. LOCK ONLY MAIN TABLE (NO JOINS)
             match_request = (
                 self.db.query(MatchRequest)
                 .filter(MatchRequest.id == request_id)
-                .with_for_update()
+                .with_for_update(of=MatchRequest)
                 .first()
             )
+
             if not match_request:
                 raise NotFoundException(detail="Join request not found")
 
-            # Only host can accept
+            # 2. AUTH CHECK
             if match_request.host_id != host_id:
                 raise ForbiddenException(detail="Only the host can accept requests")
 
-            # Request must be pending
-            RideStateMachine.transition_request(match_request.status, REQUEST_STATUS_ACCEPTED)
+            # 3. STATE VALIDATION (idempotent safe)
+            if match_request.status == REQUEST_STATUS_ACCEPTED:
+                # Already accepted - return existing match (idempotent behavior)
+                existing_match = (
+                    self.db.query(Match)
+                    .filter(
+                        Match.ride_id == match_request.ride_id,
+                        Match.guest_id == match_request.guest_id,
+                        Match.status.in_([MATCH_STATUS_MATCHED, MATCH_STATUS_IN_PROGRESS]),
+                    )
+                    .first()
+                )
+                if existing_match:
+                    self.db.rollback()
+                    return existing_match
+                # Edge case: request marked accepted but no match exists - fall through to create
 
+            if match_request.status != REQUEST_STATUS_PENDING:
+                raise BadRequestException(
+                    detail=f"Cannot transition from '{match_request.status}' to 'accepted'"
+                )
+
+            # 4. UPDATE STATE
             # Ride must still be open
             ride = (
                 self.db.query(RidePing)
                 .filter(RidePing.id == match_request.ride_id)
-                .with_for_update()
+                .with_for_update(of=RidePing)
                 .first()
             )
             if not ride or ride.status != PING_STATUS_OPEN:
                 raise RideAlreadyMatchedException()
 
-            # --- NEW: Re-check capacity before accepting ---
+            # Re-check capacity before accepting
             if (ride.current_passengers or 0) >= ride.max_passengers:
                 raise BadRequestException(detail="This ride is already full")
 
-            # Update request status
+            # Validate state machine transition
+            RideStateMachine.transition_request(match_request.status, REQUEST_STATUS_ACCEPTED)
+
             match_request.status = REQUEST_STATUS_ACCEPTED
 
             # Update ping status and increment
@@ -186,9 +207,6 @@ class MatchService:
             )
             self.db.add(match)
 
-            ride_id = match_request.ride_id
-            guest_id = match_request.guest_id
-
             # Decline all other pending requests only if ride is now full
             if is_full:
                 other_requests = (
@@ -202,39 +220,84 @@ class MatchService:
                 )
                 for req in other_requests:
                     req.status = REQUEST_STATUS_DECLINED
-        if match:
+
+            # 5. COMMIT
+            self.db.commit()
+            self.db.refresh(match_request)
             self.db.refresh(match)
-        if ride_id and guest_id:
+
+            # 6. OPTIONAL: LOAD RELATIONS AFTERWARD / NOTIFICATIONS
             NotificationService(self.db).create_notification(
-                user_id=guest_id,
+                user_id=match_request.guest_id,
                 title="Request accepted",
                 body="Your join request was accepted.",
                 n_type="match_accepted",
-                data={"related_id": str(ride_id), "match_id": str(match.id) if match else None},
+                data={"related_id": str(match_request.ride_id), "match_id": str(match.id)},
             )
-        return match
+            return match
+
+        except Exception as e:
+            self.db.rollback()
+            # Re-raise application exceptions
+            if isinstance(e, (NotFoundException, ForbiddenException, BadRequestException, RideAlreadyMatchedException)):
+                raise
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     def decline_request(self, request_id: uuid.UUID, host_id: uuid.UUID) -> MatchRequest:
-        """Decline a join request (host only)."""
-        match_request = self.db.query(MatchRequest).filter(MatchRequest.id == request_id).first()
-        if not match_request:
-            raise NotFoundException(detail="Join request not found")
+        """Decline a join request (host only). Idempotent - safe to call multiple times."""
+        try:
+            # 1. LOCK ONLY MAIN TABLE (NO JOINS)
+            match_request = (
+                self.db.query(MatchRequest)
+                .filter(MatchRequest.id == request_id)
+                .with_for_update(of=MatchRequest)
+                .first()
+            )
 
-        if match_request.host_id != host_id:
-            raise ForbiddenException(detail="Only the host can decline requests")
+            if not match_request:
+                raise NotFoundException(detail="Join request not found")
 
-        RideStateMachine.transition_request(match_request.status, REQUEST_STATUS_DECLINED)
-        match_request.status = REQUEST_STATUS_DECLINED
-        self.db.commit()
-        self.db.refresh(match_request)
-        NotificationService(self.db).create_notification(
-            user_id=match_request.guest_id,
-            title="Request declined",
-            body="Your join request was declined.",
-            n_type="match_declined",
-            data={"related_id": str(match_request.ride_id), "request_id": str(match_request.id)},
-        )
-        return match_request
+            # 2. AUTH CHECK
+            if match_request.host_id != host_id:
+                raise ForbiddenException(detail="Only the host can decline requests")
+
+            # 3. STATE VALIDATION (idempotent safe)
+            if match_request.status == REQUEST_STATUS_DECLINED:
+                # Already declined - return as-is (idempotent behavior)
+                self.db.rollback()
+                return match_request
+
+            if match_request.status != REQUEST_STATUS_PENDING:
+                raise BadRequestException(
+                    detail=f"Cannot transition from '{match_request.status}' to 'declined'"
+                )
+
+            # Validate state machine transition
+            RideStateMachine.transition_request(match_request.status, REQUEST_STATUS_DECLINED)
+
+            # 4. UPDATE STATE
+            match_request.status = REQUEST_STATUS_DECLINED
+
+            # 5. COMMIT
+            self.db.commit()
+            self.db.refresh(match_request)
+
+            # 6. NOTIFICATIONS
+            NotificationService(self.db).create_notification(
+                user_id=match_request.guest_id,
+                title="Request declined",
+                body="Your join request was declined.",
+                n_type="match_declined",
+                data={"related_id": str(match_request.ride_id), "request_id": str(match_request.id)},
+            )
+            return match_request
+
+        except Exception as e:
+            self.db.rollback()
+            # Re-raise application exceptions
+            if isinstance(e, (NotFoundException, ForbiddenException, BadRequestException)):
+                raise
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     def cancel_match(self, match_id: uuid.UUID, user_id: uuid.UUID) -> Match:
         """Cancel a match (participant only)."""

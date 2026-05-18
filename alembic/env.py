@@ -4,7 +4,8 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.base import Base
 from app.models import (  # noqa: F401 - Import models so they register
-    User, RidePing, MatchRequest, Match, ChatMessage, Rating, Report
+    User, RidePing, MatchRequest, Match, ChatMessage, Rating, Report,
+    BlockedUser, Notification, DeviceToken, FareSplit
 )
 
 config = context.config
