@@ -11,6 +11,7 @@ class DeviceTokenCreate(BaseModel):
 
 class NotificationResponse(BaseModel):
     id: UUID
+    user_id: UUID
     title: str
     body: str
     data: Optional[str] = None
