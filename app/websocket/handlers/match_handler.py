@@ -1,0 +1,2 @@
+from app.websocket.handlers.chat_handler import handle_match_websocket as original_handle_match
+handle_match_websocket = original_handle_match

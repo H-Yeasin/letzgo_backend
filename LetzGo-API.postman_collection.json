@@ -1,0 +1,1273 @@
+{
+    "info": {
+        "name": "LetzGo API",
+        "description": "Complete API collection for the LetzGo ride-sharing backend.\n\n## Auth Flow\n1. Call `POST /api/v1/auth/send-otp` with a phone number\n2. Call `POST /api/v1/auth/verify-otp` (dev OTP: 123456)\n3. Use the returned `access_token` as a Bearer token in the Authorization header\n4. If new user, call `POST /api/v1/auth/register` to complete profile\n\n## Ping & Match Flow (NEW)\n1. Host creates a ride: `POST /api/v1/pings`\n2. Guests discover nearby rides: `GET /api/v1/pings/nearby`\n3. Guest requests to join: `POST /api/v1/matches/request`\n4. Host sees pending requests: `GET /api/v1/pings/{ping_id}/requests`\n5. Host accepts: `POST /api/v1/matches/request/{request_id}/accept`\n6. Match created → chat unlocked\n7. Host starts ride: `POST /api/v1/matches/{match_id}/start`\n8. Host completes ride: `POST /api/v1/matches/{match_id}/complete`",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "version": "1.0.0"
+    },
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{auth_token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "auth_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "target_user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "report_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "dispute_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "ping_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "request_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "match_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "lat",
+            "value": "23.8103",
+            "type": "string"
+        },
+        {
+            "key": "lng",
+            "value": "90.4125",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Health & Info",
+            "item": [
+                {
+                    "name": "Root Info",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                ""
+                            ]
+                        },
+                        "description": "Get app name, version, and status."
+                    }
+                },
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/health",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health"
+                            ]
+                        },
+                        "description": "Simple health check endpoint."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Authentication",
+            "item": [
+                {
+                    "name": "Send OTP",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/send-otp",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "send-otp"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"phone\": \"+8801712345678\"\n}"
+                        },
+                        "description": "Send OTP to phone number. In development, always returns 123456."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response has success true\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.success).to.eql(true);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Verify OTP",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/verify-otp",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "verify-otp"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"phone\": \"+8801712345678\",\n  \"otp\": \"123456\"\n}"
+                        },
+                        "description": "Verify OTP and authenticate user. Returns JWT token. Use dev OTP: 123456."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.access_token) {",
+                                    "    pm.collectionVariables.set(\"auth_token\", jsonData.access_token);",
+                                    "    pm.collectionVariables.set(\"user_id\", jsonData.user.id);",
+                                    "    console.log(\"Token set: \" + jsonData.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Complete Registration",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "register"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"phone\": \"+8801712345678\",\n  \"name\": \"John Doe\",\n  \"gender\": \"male\",\n  \"avatar_url\": null\n}"
+                        },
+                        "description": "Complete user registration/profile after OTP verification (for new users)."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.access_token) {",
+                                    "    pm.collectionVariables.set(\"auth_token\", jsonData.access_token);",
+                                    "    pm.collectionVariables.set(\"user_id\", jsonData.user.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Admin Login",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/admin-login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "admin-login"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"phone\": \"+8801712345678\",\n  \"otp\": \"123456\"\n}"
+                        },
+                        "description": "Admin login. Requires a user with is_admin=True. Returns JWT token."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.access_token) {",
+                                    "    pm.collectionVariables.set(\"auth_token\", jsonData.access_token);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Users",
+            "item": [
+                {
+                    "name": "Get My Profile",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "me"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get current authenticated user's profile."
+                    }
+                },
+                {
+                    "name": "Update My Profile",
+                    "request": {
+                        "method": "PATCH",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "me"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Updated Name\",\n  \"gender\": \"male\",\n  \"avatar_url\": \"https://example.com/avatar.jpg\",\n  \"is_onboarding_complete\": true\n}"
+                        },
+                        "description": "Update current user's profile fields."
+                    }
+                },
+                {
+                    "name": "Get User Public Profile",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/{{target_user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "{{target_user_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get another user's public profile (limited fields). Requires auth."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Ride Pings",
+            "item": [
+                {
+                    "name": "Create Ride Ping",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/pings",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "pings"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"pickup_label\": \"Mohakhali\",\n  \"pickup_lat\": 23.7800,\n  \"pickup_lng\": 90.4050,\n  \"destination_label\": \"Mirpur 10\",\n  \"destination_lat\": 23.8060,\n  \"destination_lng\": 90.3685,\n  \"estimated_fare\": 120,\n  \"gender_preference\": \"any\",\n  \"max_passengers\": 2,\n  \"meetup_point\": \"Near KFC\",\n  \"expires_in_minutes\": 30\n}"
+                        },
+                        "description": "Host creates a new ride ping."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.id) {",
+                                    "    pm.collectionVariables.set(\"ping_id\", jsonData.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Nearby Pings",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/pings/nearby?lat={{lat}}&lng={{lng}}&radius=500",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "pings",
+                                "nearby"
+                            ],
+                            "query": [
+                                {
+                                    "key": "lat",
+                                    "value": "{{lat}}"
+                                },
+                                {
+                                    "key": "lng",
+                                    "value": "{{lng}}"
+                                },
+                                {
+                                    "key": "radius",
+                                    "value": "500"
+                                },
+                                {
+                                    "key": "gender",
+                                    "value": "",
+                                    "description": "Optional: filter by user gender (male, female)"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Main feed: discover nearby ride pings within 500m radius.\nReturns limited host profile (gender, rating, trust_level).\nAutomatically filters: open only, not blocked, not expired, capacity available, gender compatible."
+                    }
+                },
+                {
+                    "name": "Get Ride Ping Details",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/pings/{{ping_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "pings",
+                                "{{ping_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get full details of a specific ride ping."
+                    }
+                },
+                {
+                    "name": "Update Ride Ping",
+                    "request": {
+                        "method": "PATCH",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/pings/{{ping_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "pings",
+                                "{{ping_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"estimated_fare\": 150,\n  \"meetup_point\": \"Near McDonald's\"\n}"
+                        },
+                        "description": "Update a ride ping (host only). Ride must still be open."
+                    }
+                },
+                {
+                    "name": "Cancel Ride Ping",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/pings/{{ping_id}}/cancel",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "pings",
+                                "{{ping_id}}",
+                                "cancel"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Cancel a ride ping (host only)."
+                    }
+                },
+                {
+                    "name": "Get Pending Requests for Ride",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/pings/{{ping_id}}/requests",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "pings",
+                                "{{ping_id}}",
+                                "requests"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Host views all pending join requests for their ride.\nReturns guest info: id, name, gender, rating_avg."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Matches & Requests",
+            "item": [
+                {
+                    "name": "Request to Join Ride",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches/request",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches",
+                                "request"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"ride_id\": \"{{ping_id}}\"\n}"
+                        },
+                        "description": "Guest requests to join a ride ping.\nEnforces: gender rule, capacity check, blocked user check, duplicate prevention."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.id) {",
+                                    "    pm.collectionVariables.set(\"request_id\", jsonData.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Accept Match Request",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches/request/{{request_id}}/accept",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches",
+                                "request",
+                                "{{request_id}}",
+                                "accept"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Host accepts a guest's join request. Creates a Match and increments current_passengers."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.id) {",
+                                    "    pm.collectionVariables.set(\"match_id\", jsonData.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Decline Match Request",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches/request/{{request_id}}/decline",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches",
+                                "request",
+                                "{{request_id}}",
+                                "decline"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Host declines a guest's join request."
+                    }
+                },
+                {
+                    "name": "Get My Matches",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches?status=",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "",
+                                    "description": "Optional: filter by status (matched, in_progress, completed, cancelled)"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get all matches for the current user."
+                    }
+                },
+                {
+                    "name": "Get Match Detail",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches/{{match_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches",
+                                "{{match_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get details of a specific match with ride info."
+                    }
+                },
+                {
+                    "name": "Start Ride",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches/{{match_id}}/start",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches",
+                                "{{match_id}}",
+                                "start"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Host marks the ride as started."
+                    }
+                },
+                {
+                    "name": "Complete Ride",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/matches/{{match_id}}/complete",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "matches",
+                                "{{match_id}}",
+                                "complete"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"final_fare\": 120\n}"
+                        },
+                        "description": "Host marks the ride as completed."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Admin",
+            "item": [
+                {
+                    "name": "Dashboard Stats",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/stats",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "stats"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get overall admin dashboard statistics."
+                    }
+                },
+                {
+                    "name": "Cancellation Stats",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/stats/cancellations?days=7",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "stats",
+                                "cancellations"
+                            ],
+                            "query": [
+                                {
+                                    "key": "days",
+                                    "value": "7",
+                                    "description": "Number of days to analyze"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get ride cancellation rate statistics."
+                    }
+                },
+                {
+                    "name": "List Users",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/users?page=1&per_page=20&search=&is_blocked=",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "users"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Page number"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "20",
+                                    "description": "Items per page (max 100)"
+                                },
+                                {
+                                    "key": "search",
+                                    "value": "",
+                                    "description": "Search by name or phone"
+                                },
+                                {
+                                    "key": "is_blocked",
+                                    "value": "",
+                                    "description": "Filter by blocked status (true/false)"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "List all users with optional filtering and pagination."
+                    }
+                },
+                {
+                    "name": "Get User Detail",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/users/{{target_user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Get detailed info about a specific user."
+                    }
+                },
+                {
+                    "name": "Block User",
+                    "request": {
+                        "method": "PATCH",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/users/{{target_user_id}}/block",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                "block"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Block a user. Cannot block admin users."
+                    }
+                },
+                {
+                    "name": "Unblock User",
+                    "request": {
+                        "method": "PATCH",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/users/{{target_user_id}}/unblock",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                "unblock"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "Unblock a previously blocked user."
+                    }
+                },
+                {
+                    "name": "List Active Rides",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/rides/active?page=1&per_page=20",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "rides",
+                                "active"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "20"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "List all active (matched / in_progress) rides."
+                    }
+                },
+                {
+                    "name": "List Completed Rides",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/rides/completed?page=1&per_page=20",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "rides",
+                                "completed"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "20"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "List all completed rides."
+                    }
+                },
+                {
+                    "name": "List Reports",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/reports?page=1&per_page=20&status=",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "reports"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "20"
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "",
+                                    "description": "Filter by status: pending, reviewed, resolved, dismissed"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "List all user reports (excludes unsafe_meetup reason)."
+                    }
+                },
+                {
+                    "name": "Update Report Status",
+                    "request": {
+                        "method": "PATCH",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/reports/{{report_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "reports",
+                                "{{report_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"resolved\"\n}"
+                        },
+                        "description": "Update report status. Options: reviewed, resolved, dismissed."
+                    }
+                },
+                {
+                    "name": "List Meetup Reports",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/meetup-reports?page=1&per_page=20&status=",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "meetup-reports"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "20"
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "",
+                                    "description": "Filter by status: pending, reviewed, resolved, dismissed"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "List unsafe meetup point reports (reason = unsafe_meetup)."
+                    }
+                },
+                {
+                    "name": "List Disputes",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/disputes?page=1&per_page=20",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "disputes"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "20"
+                                }
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "description": "List all disputed rides."
+                    }
+                },
+                {
+                    "name": "Resolve Dispute",
+                    "request": {
+                        "method": "PATCH",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/admin/disputes/{{dispute_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "admin",
+                                "disputes",
+                                "{{dispute_id}}"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"status\": \"resolved\",\n  \"resolution_note\": \"Resolved in favor of the host\"\n}"
+                        },
+                        "description": "Resolve or dismiss a dispute. Status options: resolved, dismissed."
+                    }
+                }
+            ]
+        }
+    ]
+}

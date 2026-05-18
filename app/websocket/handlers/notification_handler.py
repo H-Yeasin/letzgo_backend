@@ -1,0 +1,2 @@
+from app.websocket.handlers.chat_handler import handle_notification_websocket as original_handle_notif
+handle_notification_websocket = original_handle_notif

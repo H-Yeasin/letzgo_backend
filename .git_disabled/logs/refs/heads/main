@@ -1,0 +1,7 @@
+0000000000000000000000000000000000000000 7ef33af62cfd1f603f2bab3a4880aeb8e608e8b1 H-Yeasin <habibullahyeasin84@gmail.com> 1778845922 +0600	commit (initial): initial commit
+7ef33af62cfd1f603f2bab3a4880aeb8e608e8b1 7ef33af62cfd1f603f2bab3a4880aeb8e608e8b1 H-Yeasin <habibullahyeasin84@gmail.com> 1778845949 +0600	Branch: renamed refs/heads/master to refs/heads/main
+7ef33af62cfd1f603f2bab3a4880aeb8e608e8b1 a8dc0ab270df1681c9f7f19587b5892d615819f3 H-Yeasin <habibullahyeasin84@gmail.com> 1778846059 +0600	commit (amend): initial commit
+a8dc0ab270df1681c9f7f19587b5892d615819f3 62594cf38ded3a14a4d51569848dd04ba1956f9a H-Yeasin <habibullahyeasin84@gmail.com> 1778846344 +0600	commit: chore: add .gitignore file for Python backend project configuration and secrets
+62594cf38ded3a14a4d51569848dd04ba1956f9a 908c3288a6b785112a60fbb8232c307a093149cc H-Yeasin <habibullahyeasin84@gmail.com> 1779017687 +0600	commit: feat: implement ride matching system with capacity management and gender-based preferences
+908c3288a6b785112a60fbb8232c307a093149cc 0e27e9e0e89a07a8bd94e8e434237baca058629f H-Yeasin <habibullahyeasin84@gmail.com> 1779018610 +0600	commit: feat: implement ride ping service with geolocation-based search and GIST indexing support
+0e27e9e0e89a07a8bd94e8e434237baca058629f 7ae3876f909abba7803afb101d9187ba3df2bf09 H-Yeasin <habibullahyeasin84@gmail.com> 1779072332 +0600	commit: feat: implement geocoding API and spatial utility functions for coordinate processing
