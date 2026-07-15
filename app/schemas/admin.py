@@ -7,7 +7,7 @@ from datetime import datetime
 # ---- Auth ----
 class AdminLoginRequest(BaseModel):
     phone: str
-    otp: str
+    password: str
 
 
 class AdminLoginResponse(BaseModel):

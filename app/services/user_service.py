@@ -1,9 +1,21 @@
+import re
 import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import create_access_token
+
+
+def normalize_bd_phone(phone: str) -> str:
+    """Normalize a Bangladeshi phone number to the stored format: 880XXXXXXXXXX.
+
+    Accepts "+8801645728080", "8801645728080", "01645728080", or "1645728080".
+    """
+    digits = re.sub(r"\D", "", phone)
+    if not digits.startswith("880"):
+        digits = "880" + digits.lstrip("0")
+    return digits
 
 
 class UserService:

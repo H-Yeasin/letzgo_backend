@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.user import OTPRequest, OTPVerify, AuthResponse, UserCreate, UserUpdate
 from app.schemas.admin import AdminLoginRequest, AdminLoginResponse
-from app.services.user_service import UserService
-from app.core.security import create_access_token
+from app.services.user_service import UserService, normalize_bd_phone
+from app.core.security import create_access_token, verify_password
 
 logger = logging.getLogger("uvicorn")
 
@@ -34,22 +34,16 @@ async def send_otp(data: OTPRequest, db: Session = Depends(get_db)):
 async def admin_login(data: AdminLoginRequest, db: Session = Depends(get_db)):
     """
     Admin login endpoint.
-    Verifies admin credentials and returns JWT token.
-    Only users with is_admin=True can login here.
+    Verifies phone number + password and returns JWT token.
+    Only users with is_admin=True and a password set can login here.
     """
-    if len(data.otp) < 4:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OTP",
-        )
-
     user_service = UserService(db)
-    user = user_service.get_by_phone(data.phone)
+    user = user_service.get_by_phone(normalize_bd_phone(data.phone))
 
-    if not user:
+    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid phone number or password",
         )
 
     if not user.is_admin:

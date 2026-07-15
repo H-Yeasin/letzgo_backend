@@ -278,9 +278,9 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"phone\": \"+8801712345678\",\n  \"otp\": \"123456\"\n}"
+                            "raw": "{\n  \"phone\": \"+8801712345678\",\n  \"password\": \"your-admin-password\"\n}"
                         },
-                        "description": "Admin login. Requires a user with is_admin=True. Returns JWT token."
+                        "description": "Admin login with phone + password. Requires a user with is_admin=True and a password set (scripts/create_admin.py). Returns JWT token."
                     },
                     "event": [
                         {

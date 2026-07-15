@@ -18,5 +18,6 @@ class User(Base, TimestampMixin):
     is_blocked = Column(Boolean, default=False)
     is_onboarding_complete = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
+    password_hash = Column(String(255), nullable=True)  # only set for admin users
     fcm_token = Column(String(500), nullable=True)
     device_token = Column(String(500), nullable=True)
