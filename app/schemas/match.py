@@ -54,14 +54,15 @@ class MatchResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
+    host: Optional[UserPublicProfile] = None
+    guest: Optional[UserPublicProfile] = None
+    ride: Optional[RidePingResponse] = None
 
     class Config:
         from_attributes = True
 
 
 class MatchDetailResponse(MatchResponse):
-    ride: Optional[RidePingResponse] = None
-
     class Config:
         from_attributes = True
 

@@ -4,6 +4,7 @@ from sqlalchemy.types import Uuid
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
 from app.db.base import Base, TimestampMixin
+from app.utils.geo import extract_coordinates
 
 
 class RidePing(Base, TimestampMixin):
@@ -26,3 +27,21 @@ class RidePing(Base, TimestampMixin):
 
     # Relationships
     host = relationship("User", foreign_keys=[host_id], lazy="joined")
+
+    # Coordinate accessors so pydantic schemas (from_attributes) can serialize
+    # the PostGIS geometry columns as plain lat/lng floats.
+    @property
+    def pickup_lat(self):
+        return extract_coordinates(self.pickup_geom)[0]
+
+    @property
+    def pickup_lng(self):
+        return extract_coordinates(self.pickup_geom)[1]
+
+    @property
+    def destination_lat(self):
+        return extract_coordinates(self.destination_geom)[0]
+
+    @property
+    def destination_lng(self):
+        return extract_coordinates(self.destination_geom)[1]
