@@ -10,6 +10,7 @@ from app.models.blocked_user import BlockedUser
 from app.core.constants import (
     PING_STATUS_OPEN, PING_STATUS_CANCELLED, PING_STATUS_EXPIRED,
     DEFAULT_SEARCH_RADIUS_METERS, EXPANDED_SEARCH_RADIUS_METERS,
+    DEFAULT_FIND_PICKUP_RADIUS_METERS, DEFAULT_FIND_DESTINATION_RADIUS_METERS,
     GENDER_ANY, GENDER_MALE, GENDER_FEMALE,
     REQUEST_STATUS_PENDING,
 )
@@ -158,19 +159,22 @@ class PingService:
         destination_lat: float,
         destination_lng: float,
         current_user_id: uuid.UUID,
-        radius_meters: float = DEFAULT_SEARCH_RADIUS_METERS,
+        pickup_radius_meters: float = DEFAULT_FIND_PICKUP_RADIUS_METERS,
+        destination_radius_meters: float = DEFAULT_FIND_DESTINATION_RADIUS_METERS,
         limit: int = 20,
     ) -> list:
         """Find rides where pickup is near user AND destination is near user's destination.
 
         This is the 'Find a Ride' feature — user has a specific destination in mind
-        and wants rides already headed that way.
+        and wants rides already headed that way. The pickup radius is deliberately
+        looser than the destination radius: a rider will travel further to reach a
+        pickup point than they will tolerate slack on where the ride ends up.
 
         Filters applied:
         - status = open
         - exclude user's own rides
-        - pickup within radius of user's current location
-        - destination within radius of user's desired destination
+        - pickup within pickup_radius_meters of user's current location
+        - destination within destination_radius_meters of user's desired destination
         - not blocked
         - not expired
         - capacity available
@@ -203,9 +207,9 @@ class PingService:
                 RidePing.status == PING_STATUS_OPEN,
                 RidePing.host_id != current_user_id,
                 # Pickup must be near user's current location
-                geo_func.ST_DWithin(pickup_geog, pickup_point_geog, radius_meters),
+                geo_func.ST_DWithin(pickup_geog, pickup_point_geog, pickup_radius_meters),
                 # Destination must be near user's desired destination
-                geo_func.ST_DWithin(dest_geog, dest_point_geog, radius_meters),
+                geo_func.ST_DWithin(dest_geog, dest_point_geog, destination_radius_meters),
                 ~RidePing.host_id.in_(blocked_ids_query),
                 ~RidePing.host_id.in_(blocked_by_ids_query),
                 RidePing.expires_at > datetime.now(timezone.utc),

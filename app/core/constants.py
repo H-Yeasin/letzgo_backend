@@ -45,6 +45,10 @@ GENDER_FEMALE = "female"
 # Geo constants
 DEFAULT_SEARCH_RADIUS_METERS = 200
 EXPANDED_SEARCH_RADIUS_METERS = 500
+# Find-a-Ride: riders tolerate a longer trip to the pickup point than
+# slack on where the ride is actually headed, so the radii differ.
+DEFAULT_FIND_PICKUP_RADIUS_METERS = 5000
+DEFAULT_FIND_DESTINATION_RADIUS_METERS = 1000
 
 # Timeouts (in minutes)
 PING_EXPIRY_MINUTES = 15

@@ -479,6 +479,39 @@
                     }
                 },
                 {
+                    "name": "Find Rides",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/rides/find",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "rides",
+                                "find"
+                            ]
+                        },
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"current_lat\": {{lat}},\n  \"current_lng\": {{lng}},\n  \"destination_lat\": 23.7721,\n  \"destination_lng\": 90.4152,\n  \"pickup_radius\": 5000,\n  \"destination_radius\": 1000\n}"
+                        },
+                        "description": "Find a Ride: rides whose pickup is within pickup_radius (meters) of the user's current location AND whose destination is within destination_radius (meters) of the desired destination.\nLegacy clients may send a single \"radius\" field instead, which applies to both distances.\nAutomatically filters: open only, not own pings, not blocked, not expired, capacity available, gender compatible."
+                    }
+                },
+                {
                     "name": "Get Ride Ping Details",
                     "request": {
                         "method": "GET",

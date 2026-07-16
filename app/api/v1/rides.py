@@ -29,7 +29,8 @@ async def find_rides(
         destination_lat=data.destination_lat,
         destination_lng=data.destination_lng,
         current_user_id=uuid.UUID(user_id),
-        radius_meters=data.radius,
+        pickup_radius_meters=data.effective_pickup_radius,
+        destination_radius_meters=data.effective_destination_radius,
     )
 
     items = []
