@@ -200,6 +200,7 @@ class MatchService:
             # Create match
             match = Match(
                 id=uuid.uuid4(),
+                request_id=match_request.id,
                 ride_id=match_request.ride_id,
                 host_id=match_request.host_id,
                 guest_id=match_request.guest_id,
@@ -389,3 +390,27 @@ class MatchService:
         if not match:
             raise NotFoundException(detail="Match not found")
         return match
+
+    def get_ride_passengers(self, ride_id: uuid.UUID, user_id: uuid.UUID) -> list:
+        """Get the passengers for a given ride. Only accessible by the host or an accepted passenger."""
+        ride = self.db.query(RidePing).filter(RidePing.id == ride_id).first()
+        if not ride:
+            raise NotFoundException(detail="Ride ping not found")
+
+        # Get all matches for this ride
+        matches = (
+            self.db.query(Match)
+            .options(joinedload(Match.guest))
+            .filter(Match.ride_id == ride_id)
+            .filter(Match.status.in_([MATCH_STATUS_MATCHED, MATCH_STATUS_IN_PROGRESS, MATCH_STATUS_COMPLETED]))
+            .all()
+        )
+
+        # Check authorization: user must be the host, or one of the matched guests
+        is_host = ride.host_id == user_id
+        is_passenger = any(m.guest_id == user_id for m in matches)
+
+        if not (is_host or is_passenger):
+            raise ForbiddenException(detail="Only the host or accepted passengers can view the passenger list")
+
+        return matches

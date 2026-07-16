@@ -94,3 +94,14 @@ class RidePingNearbyListResponse(BaseModel):
 
 class DeleteExpiredPingsResponse(BaseModel):
     deleted: int
+
+
+class RidePassengerResponse(BaseModel):
+    match_id: UUID
+    user_id: UUID
+    name: str
+    gender: Optional[str] = None
+    rating_avg: float
+
+    class Config:
+        from_attributes = True

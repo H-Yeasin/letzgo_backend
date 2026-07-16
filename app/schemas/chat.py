@@ -10,9 +10,10 @@ class ChatMessageCreate(BaseModel):
 
 class ChatMessageResponse(BaseModel):
     id: UUID
-    match_id: UUID
+    match_id: Optional[UUID] = None
+    request_id: Optional[UUID] = None
     sender_id: UUID
-    content: str
+    message: str
     created_at: datetime
 
     class Config:

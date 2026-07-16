@@ -176,3 +176,30 @@ async def get_ping_requests(
             "created_at": req.created_at,
         })
     return result
+
+
+from app.schemas.ping import RidePassengerResponse
+
+@router.get("/{ping_id}/passengers", response_model=List[RidePassengerResponse])
+async def get_ping_passengers(
+    ping_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Get all matched passengers for a ride. Only host and passengers can view."""
+    # Note: importing MatchService locally to avoid circular imports if any, but PingService is already used
+    from app.services.match_service import MatchService
+    service = MatchService(db)
+    matches = service.get_ride_passengers(ping_id, uuid.UUID(user_id))
+
+    result = []
+    for m in matches:
+        if m.guest:
+            result.append(RidePassengerResponse(
+                match_id=m.id,
+                user_id=m.guest.id,
+                name=m.guest.name,
+                gender=m.guest.gender,
+                rating_avg=m.guest.rating_avg,
+            ))
+    return result

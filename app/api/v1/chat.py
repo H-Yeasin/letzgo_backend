@@ -10,13 +10,27 @@ import uuid
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-@router.get("/{match_id}/history", response_model=List[ChatMessageResponse])
+@router.get("/{thread_id}/history", response_model=List[ChatMessageResponse])
 async def get_chat_history(
-    match_id: uuid.UUID,
+    thread_id: uuid.UUID,
     limit: int = 100,
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """Retrieve chat history for a match."""
+    """Retrieve chat history for a match or match request."""
     service = ChatService(db)
-    return service.get_chat_history(match_id, uuid.UUID(user_id), limit)
+    return service.get_chat_history(thread_id, uuid.UUID(user_id), limit)
+
+
+from app.schemas.chat import ChatMessageCreate
+
+@router.post("/{thread_id}", response_model=ChatMessageResponse)
+async def send_chat_message(
+    thread_id: uuid.UUID,
+    message_in: ChatMessageCreate,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Send a new chat message for a match or match request."""
+    service = ChatService(db)
+    return service.save_message(thread_id, uuid.UUID(user_id), message_in.content)

@@ -12,6 +12,7 @@ class Match(Base, TimestampMixin):
     )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    request_id = Column(Uuid(as_uuid=True), ForeignKey("match_requests.id"), nullable=True, index=True)
     ride_id = Column(Uuid(as_uuid=True), ForeignKey("ride_pings.id"), nullable=False, index=True)
     host_id = Column(Uuid(as_uuid=True), ForeignKey("profiles.id"), nullable=False, index=True)
     guest_id = Column(Uuid(as_uuid=True), ForeignKey("profiles.id"), nullable=False, index=True)
