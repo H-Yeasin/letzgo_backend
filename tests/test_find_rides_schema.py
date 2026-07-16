@@ -7,6 +7,7 @@ fallback rules: split fields win when present, otherwise `radius` applies
 to both distances (old-client behavior unchanged).
 """
 
+# pyrefly: ignore [missing-import]
 import pytest
 from pydantic import ValidationError
 
