@@ -1,6 +1,12 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from pathlib import Path
 import os
+
+# Repository root of the backend (letzgo_backend/)
+BASE_DIR = Path(__file__).resolve().parents[2]
+# Local storage for user-uploaded files, served at /uploads
+UPLOAD_DIR = BASE_DIR / "uploads"
 
 
 class Settings(BaseSettings):

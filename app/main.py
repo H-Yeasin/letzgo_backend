@@ -2,13 +2,14 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from app.core.config import settings
+from app.core.config import settings, UPLOAD_DIR
 from app.db.session import get_db
 from app.core.security import get_current_user_id
 
@@ -111,6 +112,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Static Files (user uploads: avatars, etc.) ─────────────────────────────────
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # ─── Register Routers ────────────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/v1")
